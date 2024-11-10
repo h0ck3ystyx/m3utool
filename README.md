@@ -157,13 +157,7 @@ The backend provides the following endpoints:
 
 ## Future Improvements
 
-- [ ] Add playlist validation
-- [ ] Implement channel editing
-- [ ] Add bulk operations
-- [ ] Support for multiple playlists
-- [ ] Add playlist preview functionality
-- [ ] Support for different playlist formats
-- [ ] Add user preferences storage
+- [ ] ???
 
 ## License
 
@@ -177,6 +171,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-Your Name - [@yourusername](https://twitter.com/yourusername)
+Your Name - [@yourusername](https://twitter.com/h0ck3ystyx)
 
-Project Link: [https://github.com/yourusername/m3u-viewer](https://github.com/yourusername/m3u-viewer)
+Project Link: [https://github.com/yourusername/m3u-viewer](https://github.com/h0ck3ystyx/m3u-viewer)
