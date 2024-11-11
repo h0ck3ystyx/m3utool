@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict
 import re
 from pathlib import Path
 import tempfile
@@ -20,6 +20,7 @@ class Channel(BaseModel):
 class ExportRequest(BaseModel):
     indices: List[int]
     original_content: str
+    modified_channels: Dict[int, Channel]  # Add this to track modifications
 
 class M3UParser:
     def __init__(self):
@@ -65,7 +66,25 @@ class M3UParser:
                     
         return self.channels
 
-    def export_selection(self, indices: List[int], original_content: str) -> str:
+    def update_extinf_line(self, line: str, channel: Channel) -> str:
+        """Update the EXTINF line with modified channel data"""
+        # Keep original attributes
+        attrs = []
+        for attr in ['tvg-name', 'tvg-logo', 'group-title']:
+            match = re.search(f'{attr}="([^"]*)"', line)
+            if match:
+                attrs.append(f'{attr}="{match.group(1)}"')
+        
+        # Update tvg-id with the new value
+        attrs.append(f'tvg-id="{channel.tvg_id}"')
+        
+        # Get the channel name (part after the comma)
+        name = line.split(',')[-1].strip()
+        
+        # Reconstruct the EXTINF line
+        return f'#EXTINF:-1 {" ".join(attrs)},{name}'
+
+    def export_selection(self, indices: List[int], original_content: str, modified_channels: Dict[int, Channel]) -> str:
         lines = original_content.split('\n')
         selected_content = ['#EXTM3U']
         current_index = 0
@@ -75,7 +94,14 @@ class M3UParser:
             line = lines[i].strip()
             if line.startswith('#EXTINF:'):
                 if current_index in indices:
-                    selected_content.append(line)
+                    # Check if this channel has been modified
+                    if current_index in modified_channels:
+                        # Update the line with modified channel data
+                        modified_line = self.update_extinf_line(line, modified_channels[current_index])
+                        selected_content.append(modified_line)
+                    else:
+                        selected_content.append(line)
+                    
                     if i + 1 < len(lines):
                         selected_content.append(lines[i + 1].strip())
                 current_index += 1
@@ -85,7 +111,6 @@ class M3UParser:
 
 app = FastAPI()
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -102,16 +127,19 @@ async def parse_m3u(file: UploadFile = File(...)):
         channels = parser.parse(content.decode())
         return {"channels": channels}
     except Exception as e:
-        print(f"Error parsing M3U: {str(e)}")  # Debug log
+        print(f"Error parsing M3U: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/export")
 async def export_selection(request: ExportRequest):
     parser = M3UParser()
     try:
-        content = parser.export_selection(request.indices, request.original_content)
+        content = parser.export_selection(
+            request.indices,
+            request.original_content,
+            request.modified_channels
+        )
         
-        # Create temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.m3u', mode='w') as tmp:
             tmp.write(content)
             tmp_path = tmp.name
@@ -122,5 +150,5 @@ async def export_selection(request: ExportRequest):
             filename='selected_channels.m3u'
         )
     except Exception as e:
-        print(f"Error exporting M3U: {str(e)}")  # Debug log
+        print(f"Error exporting M3U: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
